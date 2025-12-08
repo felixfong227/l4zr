@@ -3,6 +3,8 @@ name: Publish GitHub Packages
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "main"
     tags:
       - "v*"
 
@@ -41,7 +43,4 @@ jobs:
             clean
             publish
             -I publish.gradle.kts
-            -x signVaccoPublication
-            -x signGprPublication
-            -x signMavenPublication
 
