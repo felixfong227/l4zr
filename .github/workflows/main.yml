@@ -1,14 +1,26 @@
 name: Gradle Build
-on: {push: {tags: null}}
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: vaccovecrana/gitflow-oss-java-slim@1.0.1
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          orgConfig: http://56db25d3f6c39937b48e-6eaf716421c53330be45fa9d36560381.r85.cf2.rackcdn.com/org-config/vacco.json
-        env:
-          SONATYPE_USER: ${{secrets.SONATYPE_USER}}
-          SONATYPE_PASSWORD: ${{secrets.SONATYPE_PASSWORD}}
-          MAVEN_SIGNING_PRV: ${{secrets.MAVEN_SIGNING_PRV}}
+          distribution: temurin
+          java-version: "21"
+      - name: Gradle cache and build
+        uses: burrunan/gradle-cache-action@v3
+        with:
+          job-id: build
+          arguments: |
+            --no-daemon
+            clean
+            build
