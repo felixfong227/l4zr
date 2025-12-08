@@ -1,0 +1,39 @@
+{
+    // Runs Gradle with the system-installed Gradle (or from PATH inside devcontainer)
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "gradle:build",
+            "type": "shell",
+            "command": "gradle",
+            "args": [
+                "build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gradle"
+            ]
+        },
+        {
+            "label": "gradle:build+export",
+            "type": "shell",
+            "command": "sh",
+            "args": [
+                "-c",
+                "gradle build && mkdir -p output && cp build/libs/*.jar output/"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gradle"
+            ]
+        }
+    ]
+}

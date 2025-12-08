@@ -1,0 +1,47 @@
+name: Publish GitHub Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+      packages: write
+    env:
+      GPR_USER: ${{ github.actor }}
+      GPR_KEY: ${{ secrets.GITHUB_TOKEN }}
+      GPR_REPO: https://maven.pkg.github.com/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Configure org profile
+        run: |
+          cat <<'EOF' > ~/.gsOrgConfig.json
+          {
+            "orgId": "vacco-oss",
+            "orgConfigUrl": "http://56db25d3f6c39937b48e-6eaf716421c53330be45fa9d36560381.r85.cf2.rackcdn.com/org-config/vacco.json"
+          }
+          EOF
+      - name: Gradle cache and publish
+        uses: burrunan/gradle-cache-action@v3
+        with:
+          job-id: publish
+          arguments: |
+            --no-daemon
+            clean
+            publish
+            -I publish.gradle.kts
+            -x signVaccoPublication
+            -x signGprPublication
+            -x signMavenPublication
+

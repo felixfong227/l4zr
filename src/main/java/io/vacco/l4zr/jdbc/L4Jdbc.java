@@ -30,6 +30,7 @@ public class L4Jdbc {
   public static final int NCHARACTER_STREAM = Types.NVARCHAR  + 1000;
 
   // constants for rqlite types
+  public static final String RQ_CHAR = "CHAR";
   public static final String RQ_INTEGER   = "INTEGER";
   public static final String RQ_NUMERIC   = "NUMERIC";
   public static final String RQ_BOOLEAN   = "BOOLEAN";
@@ -43,17 +44,20 @@ public class L4Jdbc {
   public static final String RQ_DATE      = "DATE";
   public static final String RQ_TIME      = "TIME";
   public static final String RQ_TIMESTAMP = "TIMESTAMP";
+  public static final String RQ_DATETIME  = "DATETIME";
   public static final String RQ_DATALINK  = "DATALINK";
   public static final String RQ_CLOB      = "CLOB";
   public static final String RQ_NCLOB     = "NCLOB";
   public static final String RQ_NVARCHAR  = "NVARCHAR";
   public static final String RQ_BLOB      = "BLOB";
+  public static final String RQ_UUID      = "UUID";
+  public static final String RQ_JSON      = "JSON";
   public static final String RQ_NULL      = "NULL";
 
   public static final String[] RQ_TYPES = new String[] {
-    RQ_INTEGER, RQ_NUMERIC, RQ_BOOLEAN, RQ_TINYINT,
+      RQ_CHAR, RQ_INTEGER, RQ_NUMERIC, RQ_BOOLEAN, RQ_TINYINT,
     RQ_SMALLINT, RQ_BIGINT, RQ_FLOAT, RQ_DOUBLE,
-    RQ_VARCHAR, RQ_DATE, RQ_TIME, RQ_TIMESTAMP,
+    RQ_VARCHAR, RQ_UUID, RQ_JSON, RQ_DATE, RQ_TIME, RQ_TIMESTAMP, RQ_DATETIME,
     RQ_DATALINK, RQ_CLOB, RQ_NCLOB, RQ_NVARCHAR,
     RQ_BLOB, RQ_NULL
   };
@@ -393,6 +397,12 @@ public class L4Jdbc {
       result = castBoolean(value, columnIndex, sourceJdbcType);
     } else if (type == byte[].class) {
       result = castBlob(value, columnIndex, sourceJdbcType);
+    } else if (type == java.util.UUID.class) {
+      try {
+        result = java.util.UUID.fromString(value);
+      } catch (Exception e) {
+        throw badConversion(columnIndex, value, e);
+      }
     } else {
       throw badConversion(columnIndex, sourceJdbcType, type);
     }
@@ -468,6 +478,8 @@ public class L4Jdbc {
             return Base64.getEncoder().encodeToString((byte[]) x);
           }
           throw badParam("Invalid BLOB data");
+        case Types.OTHER:
+          return x.toString();
         default:
           throw notSupported(format("Unsupported SQL type: [%s]", targetSqlType));
       }
@@ -483,6 +495,8 @@ public class L4Jdbc {
     var parts = rqliteType.trim().toUpperCase().split("[(),]");
     var rqType = parts[0];
     switch (rqType) {
+      case RQ_CHAR:
+        return VARCHAR;
       case RQ_INTEGER:    return INTEGER;
       case RQ_NUMERIC:    return NUMERIC;
       case RQ_BOOLEAN:    return BOOLEAN;
@@ -496,11 +510,14 @@ public class L4Jdbc {
       case RQ_DATE:       return DATE;
       case RQ_TIME:       return TIME;
       case RQ_TIMESTAMP:  return TIMESTAMP;
+      case RQ_DATETIME:   return TIMESTAMP;
       case RQ_DATALINK:   return DATALINK;
       case RQ_CLOB:       return CLOB;
       case RQ_NCLOB:      return NCLOB;
       case RQ_NVARCHAR:   return NVARCHAR;
       case RQ_BLOB:       return BLOB;
+      case RQ_JSON:       return VARCHAR;
+      case RQ_UUID:       return VARCHAR;
       case RQ_NULL:       return NULL;
       default: return -1;
     }
@@ -510,7 +527,7 @@ public class L4Jdbc {
     if (rqType == null || RQ_NULL.equalsIgnoreCase(rqType)) {
       return false; // NULL or unknown
     }
-    var typeUpper = rqType.toUpperCase();
+    var typeUpper = rqType.trim().toUpperCase().split("[(),]")[0];
     return typeUpper.equals(RQ_INTEGER)
       || typeUpper.equals(RQ_NUMERIC)
       || typeUpper.equals(RQ_TINYINT)
@@ -524,8 +541,12 @@ public class L4Jdbc {
     if (rqliteType == null || RQ_NULL.equalsIgnoreCase(rqliteType)) {
       return 0; // NULL or unknown
     }
-    var typeUpper = rqliteType.toUpperCase();
-    switch (typeUpper) {
+    var parts = rqliteType.trim().toUpperCase().split("[(),]");
+    var baseType = parts[0];
+    var len = parts.length > 1 ? parts[1] : null;
+    switch (baseType) {
+      case RQ_CHAR:
+        return len != null ? Integer.parseInt(len) : 255;
       case RQ_INTEGER:    return 10;     // 32-bit integer (approx 10 digits)
       case RQ_NUMERIC:    return 38;     // Arbitrary precision, conservative estimate
       case RQ_BOOLEAN:    return 1;      // 0 or 1
@@ -534,7 +555,8 @@ public class L4Jdbc {
       case RQ_BIGINT:     return 19;     // 64-bit integer (approx 19 digits)
       case RQ_FLOAT:      return 7;      // Single-precision (approx 7 digits)
       case RQ_DOUBLE:     return 15;     // Double-precision (approx 15 digits)
-      case RQ_VARCHAR:    return 255;    // Arbitrary, conservative default
+      case RQ_VARCHAR:
+        return len != null ? Integer.parseInt(len) : 255; // Use declared length if present
       case RQ_DATE:       return 10;     // "YYYY-MM-DD"
       case RQ_TIME:       return 8;      // "HH:MM:SS"
       case RQ_TIMESTAMP:  return 19;     // "YYYY-MM-DD HH:MM:SS"
@@ -543,13 +565,16 @@ public class L4Jdbc {
       case RQ_NCLOB:      return 65535;  // Large national text
       case RQ_NVARCHAR:   return 255;    // National text, conservative default
       case RQ_BLOB:       return 65535;  // Binary data, conservative default
+      case RQ_DATETIME:   return 29;     // "YYYY-MM-DD HH:MM:SS.SSS+ZZ"
+      case RQ_JSON:       return 65535;  // Treat JSON as large text
+      case RQ_UUID:       return 36;     // "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
       default:            return 0;      // Fallback for unknown types
     }
   }
 
   public static Class<?> getJdbcTypeClass(String type) {
-    var typeUpper = type.toUpperCase();
-    switch (typeUpper) {
+    var baseType = type.trim().toUpperCase().split("[(),]")[0];
+    switch (baseType) {
       case RQ_INTEGER:   return Integer.class;
       case RQ_NUMERIC:   return java.math.BigDecimal.class;
       case RQ_BOOLEAN:   return Boolean.class;
@@ -558,15 +583,19 @@ public class L4Jdbc {
       case RQ_BIGINT:    return Long.class;
       case RQ_FLOAT:     return Float.class;
       case RQ_DOUBLE:    return Double.class;
+      case RQ_CHAR:
       case RQ_VARCHAR:
+      case RQ_JSON:
       case RQ_NVARCHAR:  return String.class;
       case RQ_DATE:      return java.sql.Date.class;
       case RQ_TIME:      return java.sql.Time.class;
       case RQ_TIMESTAMP: return java.sql.Timestamp.class;
+      case RQ_DATETIME:  return java.sql.Timestamp.class;
       case RQ_DATALINK:  return java.net.URL.class;
       case RQ_CLOB:      return java.sql.Clob.class;
       case RQ_NCLOB:     return java.sql.NClob.class;
       case RQ_BLOB:      return byte[].class;
+      case RQ_UUID:      return String.class;
       default:           return Object.class;
     }
   }
@@ -607,6 +636,8 @@ public class L4Jdbc {
       return RQ_NCLOB;
     } else if (clazz == byte[].class) {
       return RQ_BLOB;
+    } else if (clazz == java.util.UUID.class) {
+      return RQ_UUID;
     }
     return RQ_NULL;
   }
@@ -623,8 +654,12 @@ public class L4Jdbc {
   }
 
   public static int getJdbcTypeColumnDisplaySize(String type) {
-    var typeUpper = type.toUpperCase();
-    switch (typeUpper) {
+    var parts = type.trim().toUpperCase().split("[(),]");
+    var baseType = parts[0];
+    var len = parts.length > 1 ? parts[1] : null;
+    switch (baseType) {
+      case RQ_CHAR:
+        return len != null ? Integer.parseInt(len) : 255; // honor declared length
       case RQ_INTEGER:    return 11;   // -2147483648 to 2147483647
       case RQ_NUMERIC:    return 38;   // Arbitrary precision, conservative estimate
       case RQ_BOOLEAN:    return 5;    // "true" or "false"
@@ -633,7 +668,8 @@ public class L4Jdbc {
       case RQ_BIGINT:     return 20;   // -2^63 to 2^63-1
       case RQ_FLOAT:      return 25;   // Scientific notation, e.g., -1.2345678E123
       case RQ_DOUBLE:     return 25;   // Scientific notation, e.g., -1.234567890123456E123
-      case RQ_VARCHAR:    return 255;  // Arbitrary, conservative default
+      case RQ_VARCHAR:
+        return len != null ? Integer.parseInt(len) : 255; // Use declared length
       case RQ_DATE:       return 10;   // "YYYY-MM-DD"
       case RQ_TIME:       return 8;    // "HH:MM:SS"
       case RQ_TIMESTAMP:  return 19;   // "YYYY-MM-DD HH:MM:SS"
@@ -642,6 +678,9 @@ public class L4Jdbc {
       case RQ_NCLOB:      return 255;  // Large national text
       case RQ_NVARCHAR:   return 255;  // National text, conservative default
       case RQ_BLOB:       return 255;  // Binary data, conservative default
+      case RQ_DATETIME:   return 29;   // "YYYY-MM-DD HH:MM:SS.SSS+ZZ"
+      case RQ_JSON:       return 255;  // Visible column width for JSON text
+      case RQ_UUID:       return 36;   // "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
       default:            return 4;    // Fallback for unknown types
     }
   }
