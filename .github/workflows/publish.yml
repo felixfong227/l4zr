@@ -24,10 +24,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          cache-read-only: false
       - name: Configure org profile
         run: |
           cat <<'EOF' > ~/.gsOrgConfig.json
@@ -36,6 +32,16 @@ jobs:
             "orgConfigUrl": "http://56db25d3f6c39937b48e-6eaf716421c53330be45fa9d36560381.r85.cf2.rackcdn.com/org-config/vacco.json"
           }
           EOF
-      - name: Publish to GitHub Packages
-        run: ./gradlew --no-daemon clean publish -I publish.gradle.kts -x signVaccoPublication -x signGprPublication -x signMavenPublication
+      - name: Gradle cache and publish
+        uses: burrunan/gradle-cache-action@v3
+        with:
+          job-id: publish
+          arguments: |
+            --no-daemon
+            clean
+            publish
+            -I publish.gradle.kts
+            -x signVaccoPublication
+            -x signGprPublication
+            -x signMavenPublication
 
