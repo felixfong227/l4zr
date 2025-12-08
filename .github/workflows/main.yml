@@ -27,7 +27,8 @@ jobs:
       - name: Gradle cache and build
         uses: burrunan/gradle-cache-action@v3
         env:
-          GIT_BRANCH: ${{ github.head_ref != '' && format('refs/heads/{0}', github.head_ref) || github.ref }}
+          GIT_BRANCH: ${{ github.event.pull_request.head.ref && format('refs/heads/{0}', github.event.pull_request.head.ref) || github.ref }}
+          GITHUB_REF: ${{ github.event.pull_request.head.ref && format('refs/heads/{0}', github.event.pull_request.head.ref) || github.ref }}
         with:
           job-id: build
           arguments: |
