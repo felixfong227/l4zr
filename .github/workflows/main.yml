@@ -26,6 +26,8 @@ jobs:
           EOF
       - name: Gradle cache and build
         uses: burrunan/gradle-cache-action@v3
+        env:
+          GIT_BRANCH: ${{ github.head_ref != '' && format('refs/heads/{0}', github.head_ref) || github.ref }}
         with:
           job-id: build
           arguments: |
